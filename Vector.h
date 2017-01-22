@@ -17,19 +17,25 @@ public:
     Vector(unsigned size, bool transposed, std::vector<Scalar> values) :
         size(size), transposed(transposed) {
             if (size != values.size())
-                throw std::runtime_error("Wrong number of elements.");
-            data.assign(values.begin(), values.end());
+                throw std::runtime_error("Wrong number of elements");
+            data = std::move(values);
     }
     
     Vector(unsigned size, std::vector<Scalar> values) : size(size) {
         if (size != values.size())
-            throw std::runtime_error("Wrong number of elements.");
-        data.assign(values.begin(), values.end());
+            throw std::runtime_error("Wrong number of elements");
+        data = std::move(values);
     }
+
+    Vector(const Vector& m) = default;
+    Vector(Vector&& m) = default;
+
+    Vector& operator=(const Vector& m) = default;
+    Vector& operator=(Vector&& m) = default;
     
     Vector(const AbstractMatrix<Scalar>& m) {
         if (!m.isVector())
-            throw std::runtime_error("Not a vector.");
+            throw std::runtime_error("Not a vector");
         if (m.getRows() == 1)
             size = m.getColumns();
         else{
@@ -37,6 +43,22 @@ public:
             transposed = true;
         }
         data.assign(m.begin(), m.end());
+    }
+    
+    Vector& operator=(const AbstractMatrix<Scalar>& m){
+        if (this != &m){
+            if (!m.isVector())
+                throw std::runtime_error("Not a vector");
+            if (m.getRows() == 1){
+                size = m.getColumns();
+                transposed = false;
+            }else{
+                size = m.getRows();
+                transposed = true;
+            }
+            data.assign(m.begin(), m.end());
+        }
+        return *this;
     }
     
     virtual bool isSquare() const override {
@@ -81,13 +103,13 @@ public:
     virtual const_iterator begin() const override { return data.begin(); }
     virtual const_iterator end() const override { return data.end(); }
     
-    virtual Scalar operator()(unsigned r, unsigned c) const {
+    virtual Scalar operator()(unsigned r, unsigned c) const override {
         if (r >= getRows() || c >= getColumns())
             throw std::out_of_range("Vector::operator()");
         return data[r * getColumns() + c];
     }
 
-    virtual Scalar& operator()(unsigned r, unsigned c) {
+    virtual Scalar& operator()(unsigned r, unsigned c) override {
         if (r >= getRows() || c >= getColumns())
             throw std::out_of_range("Vector::operator()");
         return data[r * getColumns() + c];
@@ -105,112 +127,115 @@ public:
         return data[p];
     }
     
-    bool operator==(const AbstractMatrix<Scalar>& m) {
+    bool operator==(const AbstractMatrix<Scalar>& m) const override {
         if (getRows() !=m.getRows() || getColumns() != m.getColumns())
             return false;
-        for (const_iterator i=begin(), j=m.begin(); i!=end(), j!=m.end(); ++i, ++j)
+        for (const_iterator i = begin(), j = m.begin(); j != m.end(); ++i, ++j)
             if (*i != *j)
                 return false;
         return true;
     }
     
-     bool operator!=(const AbstractMatrix<Scalar>& m) {
-         return this == &m;
-     }
-    
-    Vector& operator=(const AbstractMatrix<Scalar>& m){
-        if (this != &m){
-            if (!m.isVector())
-                throw std::runtime_error("Not a vector.");
-            if (m.getRows() == 1){
-                size = m.getColumns();
-                transposed = false;
-            }else{
-                size = m.getRows();
-                transposed = true;
-            }
-            data.assign(m.begin(), m.end());
-        }
-        return *this;
-    }
-    
     Vector operator-() {
         std::vector<Scalar> temp;
+        temp.reserve(data.size());
         for (auto element : *this)
             temp.push_back(-element);
-        return Vector(size, transposed, temp);
+        return Vector(size, transposed, std::move(temp));
     }
     
-    Vector operator+(const AbstractMatrix<Scalar>& m) {
+    Vector& operator+=(const AbstractMatrix<Scalar>& m) {
         if (getRows() != m.getRows() || getColumns() != m.getColumns())
-            throw std::runtime_error("dsf");
-        std::vector<Scalar> sum;
-        for (const_iterator i=begin(), j=m.begin(); i!=end(), j!=m.end(); ++i, ++j)
-            sum.push_back(*i + *j);
-        return Vector(size, sum);
+            throw std::runtime_error("Wrong size");
+        auto m_data = m.begin();
+        for (unsigned i = 0; i < size; i++)
+            data[i] += m_data[i];
+        return *this;;
     }
     
-    Vector& operator+=(const AbstractMatrix<Scalar>& m){
-        *this = *this + m;
-        return *this;
+    Vector operator+(const AbstractMatrix<Scalar>& m){
+        Vector copy(*this);
+        copy += m;
+        return copy;
     }
     
-    Vector operator-(const AbstractMatrix<Scalar>& m) {
+    Vector& operator-=(const AbstractMatrix<Scalar>& m) {
         if (getRows() != m.getRows() || getColumns() != m.getColumns())
-            throw std::runtime_error("dsf");
-        std::vector<Scalar> sum;
-        for (const_iterator i=begin(), j=m.begin(); i!=end(), j!=m.end(); ++i, ++j)
-            sum.push_back(*i - *j);
-        return Vector(size, sum);
+            throw std::runtime_error("Wrong size");
+        auto m_data = m.begin();
+        for (unsigned i = 0; i < size; i++)
+            data[i] -= m_data[i];
+        return *this;;
     }
     
-    Vector& operator-=(const AbstractMatrix<Scalar>& m){
-        *this = *this - m;
-        return *this;
+    Vector operator-(const AbstractMatrix<Scalar>& m){
+        Vector copy(*this);
+        copy -= m;
+        return copy;
     }
     
     Matrix<Scalar> operator*(const AbstractMatrix<Scalar>& m) {
         if (getColumns() != m.getRows())
             throw std::runtime_error("Wrong size");
-        std::vector<Scalar> elements;
-        for(unsigned i = 0; i < getRows(); i++){
-            std::vector<Scalar> row(m.getColumns(), 0);
-            for(unsigned j = 0; j < getColumns(); j++)
-                for(unsigned k = 0; k < m.getColumns(); k++)
-                    row[k] = row[k] + this->operator()(i,j) * m(j,k);
-            for(auto it = row.begin(); it != row.end(); it++)
-                elements.push_back(*it);
+        unsigned resRows = getRows();
+        unsigned resColumns = m.getColumns();
+        std::vector<Scalar> elements(resRows * resColumns, 0);
+        for (unsigned i = 0; i < resRows; i++){
+            Scalar* row = elements.data() + i * resColumns;
+            for (unsigned j = 0; j < getColumns(); j++)
+                for (unsigned k = 0; k < resColumns; k++)
+                    row[k] += this->operator()(i,j) * m(j,k);
         }
-        return Matrix<Scalar>(getRows(), m.getColumns(), elements);
+        return Matrix<Scalar>(resRows, resColumns, std::move(elements));
     }
     
-    Vector& operator*=(const AbstractMatrix<Scalar>& m){
+    Vector& operator*=(const AbstractMatrix<Scalar>& m) {
         *this = *this * m;
         return *this;
     }
     
-    Vector operator*(const Scalar& c) {
-        std::vector<Scalar> elements;
-        for(auto it = this->begin(); it != this->end(); it++)
-            elements.push_back(*it * c);
-        return Vector(size, transposed, elements);
-    }
-    
-    Vector& operator*=(const Scalar& c){
-        *this = *this * c;
+    Vector& operator*=(const Scalar& c) {
+        for (auto& e : data)
+            e *= c;
         return *this;
     }
     
-    template<typename Scalar_>
-    friend Vector<Scalar_> operator*(const Scalar_& c, const Vector<Scalar_>& m);
+    Vector operator*(const Scalar& c) {
+        Vector copy(*this);
+        copy *= c;
+        return copy;
+    }
     
-    Vector transpone() {
+    virtual Scalar trace() const override {
+        if (!isSquare())
+            throw std::runtime_error("Not a square matrix");
+        return data[0];
+    }
+    
+    template<typename T = double>
+    T det() const {
+        if (!isSquare())
+            throw std::runtime_error("Not a square matrix");
+        return (T)data[0];
+    }
+    
+    void swapElements(unsigned first, unsigned second) {
+        if (first >= size || second >= size)
+            throw std::out_of_range("Vector::swapRows");
+        std::swap(data[first], data[second]);
+    }
+    
+    Vector transpone() const {
         return Vector(size, !transposed, data);
+    }
+    
+    void transponeThis(){
+        transposed = !transposed;
     }
 
 private:
-    unsigned size;
     std::vector<Scalar> data;
+    unsigned size;
     bool transposed = false;
     /**
      * false - horizontal
@@ -220,7 +245,7 @@ private:
 
 template<typename Scalar>
 Vector<Scalar> operator*(const Scalar& c, Vector<Scalar>& m) {
-   return m*c;
+   return m * c;
 }
 
 #endif

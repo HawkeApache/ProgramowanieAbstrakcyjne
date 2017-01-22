@@ -1,24 +1,3 @@
-/*
-
-X	1. Dziedziczenie
-X	2. Metody wirtualne
-X	3. Funkcje czysto wirtualne 
-X	4. Polimorfizm dynamiczny
-X	5. Funkcje szablonowe
-X	6. Klasy szablonowe
-X	7. Specjalizowanie klas i funkcji szablonowych
-X	8. Osadzone klasy wewnątrz szablonów klas
-X	9. Funktory
-X	10. STL
-X		a. Kontenery
-X		b. Iteratorys
-X		c. Algorytmy
-X		d. Obiekty funkcyjne
-	11. Koncepty
-	12. Inteligentne wskaźniki
-
-*/
-
 #ifndef ABSTRACT_MATRIX_H
 #define ABSTRACT_MATRIX_H
 
@@ -50,20 +29,21 @@ public:
     
     virtual Scalar operator()(unsigned r, unsigned c) const = 0;
     virtual Scalar& operator()(unsigned r, unsigned c) = 0;
-    virtual bool operator==(const AbstractMatrix<Scalar>& m) = 0;
-    virtual bool operator!=(const AbstractMatrix<Scalar>& m) = 0;
+    virtual bool operator==(const AbstractMatrix<Scalar>& m) const = 0;
+    bool operator!=(const AbstractMatrix<Scalar>& m) const { return !(*this == m); }
     
-    template<class Scalar>
-    friend std::ostream& operator<< (std::ostream& out, const AbstractMatrix<Scalar>& m);
+    virtual Scalar max() const {
+        return *std::max_element(begin(), end());
+    }
+    
+    virtual Scalar min() const {
+        return *std::min_element(begin(), end());
+    }
+    
+    virtual Scalar trace() const = 0;
+    
+    template<typename T = double> T det();
 
-    class MaxCompare {
-    public:
-        bool operator()(const AbstractMatrix& l, const AbstractMatrix& r) const {
-            const_iterator lMax = std::max_element(l.begin(), l.end());
-            const_iterator rMax = std::max_element(r.begin(), r.end());
-            return *lMax < *rMax;
-        }
-    };
 };
 
 template<class Scalar>
@@ -75,7 +55,5 @@ std::ostream& operator<<(std::ostream& out, const AbstractMatrix<Scalar>& m){
     }
     return out;
 }
-
-
 
 #endif
