@@ -43,6 +43,9 @@ public:
     virtual Scalar trace() const = 0;
     
     template<typename T = double> T det();
+    
+    virtual void transponeThis() = 0;
+    virtual void makeIdentity() = 0;
 
 };
 

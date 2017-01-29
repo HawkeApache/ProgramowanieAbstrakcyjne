@@ -198,7 +198,7 @@ public:
         Matrix<T> m(rows, columns, v);
         
         bool swap = false;
-        for (unsigned k = 0; k < rows-1; k++){
+        for (unsigned k = 0; k < columns-1; k++){
             if (m(k,k) == 0){
                 bool detZero = true;
                 for (unsigned i = k+1; i < rows; i++)
@@ -213,7 +213,7 @@ public:
             }
             for (unsigned i = k+1; i < rows; i++){
                 T factor = m(i,k) / m(k,k);
-                for ( unsigned j = k; j < rows; j++){
+                for ( unsigned j = k; j < columns; j++){
                     T element = m(i,j) - factor * m(k,j);
                     m(i, j) = element;
                 }
@@ -228,6 +228,60 @@ public:
             return -det;
         
         return det;
+    }
+    
+    template<typename T = double>
+    Matrix<T> invert() const {
+        if (!isSquare())
+            throw std::runtime_error("Not a square matrix");
+        if (rows == 1)
+            return Matrix<T>(1,1,1/(T)data[0]);
+        
+        std::vector<T> v(data.begin(), data.end());
+        Matrix<T> m(rows, columns, v);
+        Matrix<T> r(rows, columns, 1);
+        r.makeIdentity();
+        
+        for (unsigned k = 0; k < columns-1; k++){
+            if (m(k,k) == 0){
+                bool detZero = true;
+                for (unsigned i = k+1; i < rows; i++)
+                    if (m(i,k) != 0){
+                        m.swapRows(i,k);
+                        r.swapRows(i,k);
+                        detZero = false;
+                        break;
+                    }
+                if (detZero)
+                    throw std::runtime_error("Singular matrix");
+            }
+            for (unsigned i = k+1; i < rows; i++){
+                T factor = m(i,k) / m(k,k);
+                for ( unsigned j = 0; j < columns; j++){
+                    m(i,j) -= factor * m(k,j);
+                    r(i,j) -= factor * r(k,j);
+                }
+            }
+        }
+        
+        if (m(rows-1, columns-1) == 0)
+            throw std::runtime_error("Singular matrix");
+        
+        for (unsigned k = columns - 1; k > 0; k--){
+            for (unsigned i = 0; i < k; i++){
+                T factor = m(i,k) / m(k,k);
+                for ( unsigned j = 0; j < columns; j++){
+                    m(i,j) -= factor * m(k,j);
+                    r(i,j) -= factor * r(k,j);
+                }
+            }
+        }
+        
+        for (unsigned i = 0; i < rows; i++)
+            for (unsigned j = 0; j < columns; j++)
+                r(i,j) /= m(i,i);
+        
+        return r;
     }
     
     void swapRows(unsigned first, unsigned second) {
@@ -252,8 +306,19 @@ public:
         return Matrix(columns, rows, std::move(elements));
     }
     
-    void transponeThis() {
+    virtual void transponeThis() override {
         *this = transpone();
+    }
+    
+    virtual void makeIdentity() override {
+        if (!isSquare())
+            throw std::runtime_error("Not a square matrix");
+        for (unsigned i = 0; i < rows; i++)
+            for (unsigned j = 0; j < columns; j++)
+                if (i != j)
+                    data[i * columns + j] = 0;
+                else
+                    data[i * columns + j] = 1;
     }
 
 private:

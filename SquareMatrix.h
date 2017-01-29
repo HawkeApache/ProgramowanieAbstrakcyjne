@@ -228,6 +228,58 @@ public:
         return det;
     }
     
+    template<typename T = double>
+    SquareMatrix<T> invert() const {
+        if (size == 1)
+            return SquareMatrix<T>(1, 1/(T)data[0]);
+        
+        std::vector<T> v(data.begin(), data.end());
+        SquareMatrix<T> m(size, v);
+        SquareMatrix<T> r(size, 1);
+        r.makeIdentity();
+        
+        for (unsigned k = 0; k < size-1; k++){
+            if (m(k,k) == 0){
+                bool detZero = true;
+                for (unsigned i = k+1; i < size; i++)
+                    if (m(i,k) != 0){
+                        m.swapRows(i,k);
+                        r.swapRows(i,k);
+                        detZero = false;
+                        break;
+                    }
+                if (detZero)
+                    throw std::runtime_error("Singular matrix");
+            }
+            for (unsigned i = k+1; i < size; i++){
+                T factor = m(i,k) / m(k,k);
+                for ( unsigned j = 0; j < size; j++){
+                    m(i,j) -= factor * m(k,j);
+                    r(i,j) -= factor * r(k,j);
+                }
+            }
+        }
+        
+        if (m(size-1, size-1) == 0)
+            throw std::runtime_error("Singular matrix");
+        
+        for (unsigned k = size - 1; k > 0; k--){
+            for (unsigned i = 0; i < k; i++){
+                T factor = m(i,k) / m(k,k);
+                for ( unsigned j = 0; j < size; j++){
+                    m(i,j) -= factor * m(k,j);
+                    r(i,j) -= factor * r(k,j);
+                }
+            }
+        }
+        
+        for (unsigned i = 0; i < size; i++)
+            for (unsigned j = 0; j < size; j++)
+                r(i,j) /= m(i,i);
+        
+        return r;
+    }
+    
     void swapRows(unsigned first, unsigned second) {
         if (first >= size || second >= size)
             throw std::out_of_range("SquareMatrix::swapRows");
@@ -250,8 +302,17 @@ public:
         return SquareMatrix(size, std::move(elements));
     }
     
-    void transponeThis() {
+    virtual void transponeThis() override {
         *this = transpone();
+    }
+    
+    virtual void makeIdentity() override {
+        for (unsigned i = 0; i < size; i++)
+            for (unsigned j = 0; j < size; j++)
+                if (i != j)
+                    data[i * size + j] = 0;
+                else
+                    data[i * size + j] = 1;
     }
 
 private:
